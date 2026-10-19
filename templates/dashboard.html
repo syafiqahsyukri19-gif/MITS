@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multitronik Inventory Tracking System</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container my-4">
+    <h2 class="mb-4 text-dark fw-bold">Multitronik Inventory Tracking System</h2>
+
+    <!-- NOTIFIKASI BERJAYA / RAKAN -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+            <strong>INFO:</strong> {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Borang Pergerakan Stok -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white fw-bold">
+            Borang Pergerakan Stok (Tracking)
+        </div>
+        <div class="card-body">
+            <form action="/transaction" method="POST" class="row g-3">
+                
+                <!-- 1. Kod Barang -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Kod Barang <span class="text-danger">*</span></label>
+                    <input type="text" name="item_code" class="form-control" placeholder="Cth: 40L3750VM" required>
+                </div>
+
+                <!-- 2. Jenis -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Jenis <span class="text-danger">*</span></label>
+                    <select name="item_type" id="item_type_select" class="form-select" onchange="checkNewCategory(this)" required>
+                        <option value="" selected disabled>-- Pilih Jenis --</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                        <option value="__NEW_CATEGORY__" class="fw-bold text-primary">+ Tambah Jenis Baharu...</option>
+                    </select>
+                </div>
+
+                <!-- 3. Brand -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Brand <span class="text-danger">*</span></label>
+                    <select name="brand" id="brand_select" class="form-select" onchange="checkNewBrand(this)" required>
+                        <option value="" selected disabled>-- Pilih Brand --</option>
+                        {% for b in brands %}
+                            <option value="{{ b }}">{{ b }}</option>
+                        {% endfor %}
+                        <option value="__NEW_BRAND__" class="fw-bold text-primary">+ Tambah Brand Baharu...</option>
+                    </select>
+                </div>
+
+                <!-- 4. Kuantiti -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Kuantiti <span class="text-danger">*</span></label>
+                    <input type="number" name="qty" min="1" value="1" class="form-control" required>
+                </div>
+
+                <!-- 5. Jenis Transaksi -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Jenis Transaksi <span class="text-danger">*</span></label>
+                    <select name="txn_type" class="form-select" required>
+                        <option value="IN">Stok Masuk (Belian)</option>
+                        <option value="OUT">Stok Keluar (Repair/Jual)</option>
+                    </select>
+                </div>
+
+                <!-- 6. Pengendali -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Pengendali (Nama) <span class="text-danger">*</span></label>
+                    <input type="text" name="handled_by" class="form-control" placeholder="Nama juruteknik" required>
+                </div>
+
+                <!-- 7. Lokasi Rak (Pilihan) -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Lokasi (Rak) <small class="text-muted">(Pilihan)</small></label>
+                    <input type="text" name="rack_location" class="form-control" placeholder="Cth: Rak A-01">
+                </div>
+
+                <!-- Butang Simpan -->
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-success w-100 fw-bold">Simpan Log</button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- Senarai Inventori & Baki Stok dengan Carian dan Filter -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Baki Stok Semasa</span>
+            <a href="/logs" class="btn btn-sm btn-outline-light">Lihat Sejarah Audit</a>
+        </div>
+        
+        <!-- BARIAN CARIAN & FILTER -->
+        <div class="card-body bg-light border-bottom py-3">
+            <div class="row g-2 align-items-center">
+                <!-- 1. Input Carian Teks -->
+                <div class="col-md-4">
+                    <input type="text" id="searchInput" class="form-control" placeholder="🔍 Cari Kod / Rak / Jenis / Brand..." onkeyup="filterTable()">
+                </div>
+                <!-- 2. Filter Jenis -->
+                <div class="col-md-3">
+                    <select id="filterCategory" class="form-select" onchange="filterTable()">
+                        <option value="">-- Semua Jenis --</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <!-- 3. Filter Brand -->
+                <div class="col-md-3">
+                    <select id="filterBrand" class="form-select" onchange="filterTable()">
+                        <option value="">-- Semua Brand --</option>
+                        {% for b in brands %}
+                            <option value="{{ b }}">{{ b }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <!-- 4. Butang Reset Filter -->
+                <div class="col-md-2">
+                    <button class="btn btn-outline-secondary w-100 fw-bold" onclick="resetFilters()">Reset Filter</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <table class="table table-hover table-bordered mb-0" id="inventoryTable">
+                <thead class="table-secondary">
+                    <tr>
+                        <th>Kod</th>
+                        <th>Jenis</th>
+                        <th>Brand</th>
+                        <th>Lokasi Rak</th>
+                        <th>Baki Stok</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr class="data-row {% if item[4] <= 0 %}table-danger fw-bold{% elif item[4] < 3 %}table-warning fw-bold{% endif %}">
+                        <td>{{ item[0] }}</td>
+                        <td>{{ item[1] }}</td>
+                        <td>{{ item[2] }}</td>
+                        <td><span class="badge bg-secondary">{{ item[3] }}</span></td>
+                        <td>{{ item[4] }}</td>
+                        <td>
+                            {% if item[4] <= 0 %}
+                                <span class="badge bg-danger">KEHABISAN STOK</span>
+                            {% elif item[4] < 3 %}
+                                <span class="badge bg-warning text-dark">STOK RENDAH</span>
+                            {% else %}
+                                <span class="badge bg-success">STOK MENCUKUPI</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            Tiada data inventori. Sila masukkan transaksi pertama menggunakan borang di atas.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    
+                    <!-- Mesej Jika Hasil Carian Tiada -->
+                    <tr id="noResultsRow" style="display: none;">
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            Tiada barang dijumpai mengikut kriteria carian/filter anda.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL POPUP: TAMBAH JENIS BAHARU -->
+<div class="modal fade" id="modalJenis" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/add-category" method="POST">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold">Tambah Jenis Baharu</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label fw-bold">Nama Jenis Baharu</label>
+          <input type="text" name="name" class="form-control" placeholder="Cth: Power Board / Speaker" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary fw-bold">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL POPUP: TAMBAH BRAND BAHARU -->
+<div class="modal fade" id="modalBrand" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/add-brand" method="POST">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold">Tambah Brand Baharu</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label fw-bold">Nama Brand Baharu</label>
+          <input type="text" name="name" class="form-control" placeholder="Cth: Samsung / Toshiba" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-primary fw-bold">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function checkNewCategory(select) {
+        if (select.value === '__NEW_CATEGORY__') {
+            select.value = '';
+            var modal = new bootstrap.Modal(document.getElementById('modalJenis'));
+            modal.show();
+        }
+    }
+
+    function checkNewBrand(select) {
+        if (select.value === '__NEW_BRAND__') {
+            select.value = '';
+            var modal = new bootstrap.Modal(document.getElementById('modalBrand'));
+            modal.show();
+        }
+    }
+
+    // FUNGSI TAPISAN (FILTER & SEARCH)
+    function filterTable() {
+        const searchVal = document.getElementById('searchInput').value.toLowerCase().trim();
+        const catVal = document.getElementById('filterCategory').value.toLowerCase().trim();
+        const brandVal = document.getElementById('filterBrand').value.toLowerCase().trim();
+
+        const rows = document.querySelectorAll('#inventoryTable tbody tr.data-row');
+        let countVisible = 0;
+
+        rows.forEach(row => {
+            const code = row.children[0].textContent.toLowerCase();
+            const type = row.children[1].textContent.toLowerCase();
+            const brand = row.children[2].textContent.toLowerCase();
+            const rack = row.children[3].textContent.toLowerCase();
+
+            const matchSearch = code.includes(searchVal) || rack.includes(searchVal) || type.includes(searchVal) || brand.includes(searchVal);
+            const matchCat = (catVal === '') || (type === catVal);
+            const matchBrand = (brandVal === '') || (brand === brandVal);
+
+            if (matchSearch && matchCat && matchBrand) {
+                row.style.display = '';
+                countVisible++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        const noResults = document.getElementById('noResultsRow');
+        if (noResults) {
+            if (countVisible === 0 && rows.length > 0) {
+                noResults.style.display = '';
+            } else {
+                noResults.style.display = 'none';
+            }
+        }
+    }
+
+    // FUNGSI RESET FILTER
+    function resetFilters() {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('filterCategory').value = '';
+        document.getElementById('filterBrand').value = '';
+        filterTable();
+    }
+</script>
+</body>
+</html>

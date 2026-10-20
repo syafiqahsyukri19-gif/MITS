@@ -147,6 +147,7 @@
                         <th>Lokasi Rak</th>
                         <th>Baki Stok</th>
                         <th>Status</th>
+                        <th class="text-center">Tindakan</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -166,10 +167,19 @@
                                 <span class="badge bg-success">STOK MENCUKUPI</span>
                             {% endif %}
                         </td>
+                        <td class="text-center">
+                            <form action="/delete" method="POST" onsubmit="return confirmDelete(this, '{{ item[0] }}');" style="margin: 0;">
+                                <input type="hidden" name="kod" value="{{ item[0] }}">
+                                <input type="hidden" name="jenis" value="{{ item[1] }}">
+                                <input type="hidden" name="brand" value="{{ item[2] }}">
+                                <input type="hidden" name="handled_by" class="handled-by-input">
+                                <button type="submit" class="btn btn-sm btn-danger fw-bold">Padam</button>
+                            </form>
+                        </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center py-4 text-muted">
+                        <td colspan="7" class="text-center py-4 text-muted">
                             Tiada data inventori. Sila masukkan transaksi pertama menggunakan borang di atas.
                         </td>
                     </tr>
@@ -177,7 +187,7 @@
                     
                     <!-- Mesej Jika Hasil Carian Tiada -->
                     <tr id="noResultsRow" style="display: none;">
-                        <td colspan="6" class="text-center py-4 text-muted">
+                        <td colspan="7" class="text-center py-4 text-muted">
                             Tiada barang dijumpai mengikut kriteria carian/filter anda.
                         </td>
                     </tr>
@@ -293,6 +303,28 @@
         document.getElementById('filterBrand').value = '';
         filterTable();
     }
+
+    function confirmDelete(form, kod) {
+    // Keluar popup prompt minta nama pengendali
+    let nama = prompt("Betul ke nak delete item '" + kod + "'?\n\nSila masukkan NAMA PENGENDALI:");
+
+    // Jika pengguna tekan 'Cancel'
+    if (nama === null) {
+        return false;
+    }
+
+    nama = nama.trim();
+
+    // Jika nama dibiarkan kosong
+    if (nama === "") {
+        alert("Pemadaman dibatalkan! Nama pengendali wajib diisi.");
+        return false;
+    }
+
+    // Masukkan nama pengendali ke dalam hidden input form
+    form.querySelector('.handled-by-input').value = nama;
+    return true;
+}
 </script>
 </body>
 </html>

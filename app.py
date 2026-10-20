@@ -164,5 +164,47 @@ def view_logs():
     conn.close()
     return render_template('logs.html', logs=logs)
 
+@app.route('/delete', methods=['POST'])
+def delete_item():
+    kod = request.form.get('kod')
+    jenis = request.form.get('jenis')
+    brand = request.form.get('brand')
+    handled_by = request.form.get('handled_by', '').strip()
+
+    if not handled_by:
+        handled_by = "Pengguna"
+
+    tarikh_semasa = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    # 1. Kira baki stok semasa item ini sebelum ia dipadam
+    cursor.execute('''
+        SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty END), 0)
+        FROM stock_logs
+        WHERE item_code = ? AND item_type = ? AND brand = ?
+    ''', (kod, jenis, brand))
+    baki_stok = cursor.fetchone()[0]
+
+    # 2. Padam item dari senarai aktif (Dashboard)
+    cursor.execute('''
+        DELETE FROM items 
+        WHERE item_code = ? AND item_type = ? AND brand = ?
+    ''', (kod, jenis, brand))
+
+    # 3. Simpan baki stok sebenar (baki_stok) ke dalam stock_logs
+    cursor.execute('''
+        INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
+        VALUES (?, ?, ?, ?, 'OUT', ?, ?, '-')
+    ''', (tarikh_semasa, kod, jenis, brand, baki_stok, handled_by))
+    
+    conn.commit()
+    conn.close()
+
+    flash(f"Item '{kod}' ({jenis} - {brand}) berjaya dipadam oleh {handled_by}!", "success")
+    return redirect(url_for('dashboard'))
+
+# Pastikan ini sentiasa berada di bahagian PALING BAWAH
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

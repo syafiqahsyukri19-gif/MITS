@@ -43,7 +43,9 @@
                             <td>{{ log[3] }}</td>
                             <td>{{ log[4] }}</td>
                             <td>
-                                {% if log[5] == 'IN' %}
+                                {% if log[6] == 0 %}
+                                    <span class="badge bg-dark">DIPADAM</span>
+                                {% elif log[5] == 'IN' %}
                                     <span class="badge bg-success">MASUK (IN)</span>
                                 {% else %}
                                     <span class="badge bg-danger">KELUAR (OUT)</span>

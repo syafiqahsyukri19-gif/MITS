@@ -1,0 +1,25 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build iOS Project
+    runs-on: macos-latest  # GitHub akan sediakan komputer Mac dalam awan secara percuma
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python (jika anda perlukan skrip Python sokongan)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.15'
+
+      - name: Semak Versi Xcode
+        run: /usr/bin/xcodebuild -version
+        
+      - name: Mesej Ujian Berjaya
+        run: echo "Pelayan macOS GitHub Actions berjaya diakses dari Windows!"

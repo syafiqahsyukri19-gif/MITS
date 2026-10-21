@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="ms">
 <head>
+    <!-- Pautan ke manifest.json -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#0d6efd">
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multitronik Inventory Tracking System</title>
@@ -33,13 +37,13 @@
             <form action="/transaction" method="POST" class="row g-3">
                 
                 <!-- 1. Kod Barang -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6">
                     <label class="form-label fw-bold">Kod Barang <span class="text-danger">*</span></label>
                     <input type="text" name="item_code" class="form-control" placeholder="Cth: 40L3750VM" required>
                 </div>
 
                 <!-- 2. Jenis -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6">
                     <label class="form-label fw-bold">Jenis <span class="text-danger">*</span></label>
                     <select name="item_type" id="item_type_select" class="form-select" onchange="checkNewCategory(this)" required>
                         <option value="" selected disabled>-- Pilih Jenis --</option>
@@ -51,7 +55,7 @@
                 </div>
 
                 <!-- 3. Brand -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6">
                     <label class="form-label fw-bold">Brand <span class="text-danger">*</span></label>
                     <select name="brand" id="brand_select" class="form-select" onchange="checkNewBrand(this)" required>
                         <option value="" selected disabled>-- Pilih Brand --</option>
@@ -63,13 +67,13 @@
                 </div>
 
                 <!-- 4. Kuantiti -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6">
                     <label class="form-label fw-bold">Kuantiti <span class="text-danger">*</span></label>
                     <input type="number" name="qty" min="1" value="1" class="form-control" required>
                 </div>
 
                 <!-- 5. Jenis Transaksi -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6">
                     <label class="form-label fw-bold">Jenis Transaksi <span class="text-danger">*</span></label>
                     <select name="txn_type" class="form-select" required>
                         <option value="IN">Stok Masuk (Belian)</option>
@@ -78,19 +82,19 @@
                 </div>
 
                 <!-- 6. Pengendali -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6">
                     <label class="form-label fw-bold">Pengendali (Nama) <span class="text-danger">*</span></label>
                     <input type="text" name="handled_by" class="form-control" placeholder="Nama juruteknik" required>
                 </div>
 
                 <!-- 7. Lokasi Rak (Pilihan) -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6">
                     <label class="form-label fw-bold">Lokasi (Rak) <small class="text-muted">(Pilihan)</small></label>
                     <input type="text" name="rack_location" class="form-control" placeholder="Cth: Rak A-01">
                 </div>
 
                 <!-- Butang Simpan -->
-                <div class="col-md-3 d-flex align-items-end">
+                <div class="col-12 col-sm-6 d-flex align-items-end">
                     <button type="submit" class="btn btn-success w-100 fw-bold">Simpan Log</button>
                 </div>
 
@@ -109,11 +113,11 @@
         <div class="card-body bg-light border-bottom py-3">
             <div class="row g-2 align-items-center">
                 <!-- 1. Input Carian Teks -->
-                <div class="col-md-4">
+                <div class="col-12 col-md-4">
                     <input type="text" id="searchInput" class="form-control" placeholder="🔍 Cari Kod / Rak / Jenis / Brand..." onkeyup="filterTable()">
                 </div>
                 <!-- 2. Filter Jenis -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6 col-md-3">
                     <select id="filterCategory" class="form-select" onchange="filterTable()">
                         <option value="">-- Semua Jenis --</option>
                         {% for cat in categories %}
@@ -122,7 +126,7 @@
                     </select>
                 </div>
                 <!-- 3. Filter Brand -->
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6 col-md-3">
                     <select id="filterBrand" class="form-select" onchange="filterTable()">
                         <option value="">-- Semua Brand --</option>
                         {% for b in brands %}
@@ -131,69 +135,71 @@
                     </select>
                 </div>
                 <!-- 4. Butang Reset Filter -->
-                <div class="col-md-2">
+                <div class="col-12 col-md-2">
                     <button class="btn btn-outline-secondary w-100 fw-bold" onclick="resetFilters()">Reset Filter</button>
                 </div>
             </div>
         </div>
 
         <div class="card-body p-0">
-            <table class="table table-hover table-bordered mb-0" id="inventoryTable">
-                <thead class="table-secondary">
-                    <tr>
-                        <th>Kod</th>
-                        <th>Jenis</th>
-                        <th>Brand</th>
-                        <th>Lokasi Rak</th>
-                        <th>Baki Stok</th>
-                        <th>Status</th>
-                        <th class="text-center">Tindakan</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in items %}
-                    <tr class="data-row {% if item[4] <= 0 %}table-danger fw-bold{% elif item[4] < 3 %}table-warning fw-bold{% endif %}">
-                        <td>{{ item[0] }}</td>
-                        <td>{{ item[1] }}</td>
-                        <td>{{ item[2] }}</td>
-                        <td><span class="badge bg-secondary">{{ item[3] }}</span></td>
-                        <td>{{ item[4] }}</td>
-                        <td>
-                            {% if item[4] <= 0 %}
-                                <span class="badge bg-danger">KEHABISAN STOK</span>
-                            {% elif item[4] < 3 %}
-                                <span class="badge bg-warning text-dark">STOK RENDAH</span>
-                            {% else %}
-                                <span class="badge bg-success">STOK MENCUKUPI</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            <form action="/delete" method="POST" onsubmit="return confirmDelete(this, '{{ item[0] }}', '{{ item[3] }}');" style="margin: 0;">
-                                <input type="hidden" name="kod" value="{{ item[0] }}">
-                                <input type="hidden" name="jenis" value="{{ item[1] }}">
-                                <input type="hidden" name="brand" value="{{ item[2] }}">
-                                <input type="hidden" name="rack" value="{{ item[3] }}">
-                                <input type="hidden" name="handled_by" class="handled-by-input">
-                                <button type="submit" class="btn btn-sm btn-danger fw-bold">Padam</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center py-4 text-muted">
-                            Tiada data inventori. Sila masukkan transaksi pertama menggunakan borang di atas.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    
-                    <!-- Mesej Jika Hasil Carian Tiada -->
-                    <tr id="noResultsRow" style="display: none;">
-                        <td colspan="7" class="text-center py-4 text-muted">
-                            Tiada barang dijumpai mengikut kriteria carian/filter anda.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered mb-0" id="inventoryTable">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th>Kod</th>
+                            <th>Jenis</th>
+                            <th>Brand</th>
+                            <th>Lokasi Rak</th>
+                            <th>Baki Stok</th>
+                            <th>Status</th>
+                            <th class="text-center">Tindakan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr class="data-row {% if item[4] <= 0 %}table-danger fw-bold{% elif item[4] < 3 %}table-warning fw-bold{% endif %}">
+                            <td>{{ item[0] }}</td>
+                            <td>{{ item[1] }}</td>
+                            <td>{{ item[2] }}</td>
+                            <td><span class="badge bg-secondary">{{ item[3] }}</span></td>
+                            <td>{{ item[4] }}</td>
+                            <td>
+                                {% if item[4] <= 0 %}
+                                    <span class="badge bg-danger">KEHABISAN STOK</span>
+                                {% elif item[4] < 3 %}
+                                    <span class="badge bg-warning text-dark">STOK RENDAH</span>
+                                {% else %}
+                                    <span class="badge bg-success">STOK MENCUKUPI</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <form action="/delete" method="POST" onsubmit="return confirmDelete(this, '{{ item[0] }}', '{{ item[3] }}');" style="margin: 0;">
+                                    <input type="hidden" name="kod" value="{{ item[0] }}">
+                                    <input type="hidden" name="jenis" value="{{ item[1] }}">
+                                    <input type="hidden" name="brand" value="{{ item[2] }}">
+                                    <input type="hidden" name="rack" value="{{ item[3] }}">
+                                    <input type="hidden" name="handled_by" class="handled-by-input">
+                                    <button type="submit" class="btn btn-sm btn-danger fw-bold">Padam</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                Tiada data inventori. Sila masukkan transaksi pertama menggunakan borang di atas.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        
+                        <!-- Mesej Jika Hasil Carian Tiada -->
+                        <tr id="noResultsRow" style="display: none;">
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                Tiada barang dijumpai mengikut kriteria carian/filter anda.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>

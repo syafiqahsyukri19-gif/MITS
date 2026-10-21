@@ -42,8 +42,10 @@
                             <td><span class="badge bg-secondary">{{ log[2] }}</span></td>
                             <td>{{ log[3] }}</td>
                             <td>{{ log[4] }}</td>
+                            
+                            <!-- Jenis Transaksi -->
                             <td>
-                                {% if log[6] == 0 %}
+                                {% if 'DIPADAM' in log[8] or log[6] == 0 %}
                                     <span class="badge bg-dark">DIPADAM</span>
                                 {% elif log[5] == 'IN' %}
                                     <span class="badge bg-success">MASUK (IN)</span>
@@ -51,9 +53,19 @@
                                     <span class="badge bg-danger">KELUAR (OUT)</span>
                                 {% endif %}
                             </td>
+
+                            <!-- Kuantiti -->
                             <td><strong>{{ log[6] }}</strong></td>
+
+                            <!-- Pengendali (Kekal nama sahaja: piqah) -->
                             <td>{{ log[7] }}</td>
-                            <td><span class="badge bg-light text-dark border">{{ log[8] }}</span></td>
+
+                            <!-- Lokasi Rak (Papar lokasi asal seperti 'testing') -->
+                            <td>
+                                <span class="badge bg-light text-dark border">
+                                    {{ log[8].replace('(DIPADAM)', '').strip() }}
+                                </span>
+                            </td>
                         </tr>
                         {% else %}
                         <tr>

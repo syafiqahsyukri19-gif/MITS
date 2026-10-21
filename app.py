@@ -179,13 +179,23 @@ def delete_item():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # 1. Kira baki stok semasa item ini sebelum ia dipadam
+    # 1. Dapatkan baki stok semasa dan lokasi rak asal sebelum item dipadam
     cursor.execute('''
-        SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty END), 0)
-        FROM stock_logs
-        WHERE item_code = ? AND item_type = ? AND brand = ?
+        SELECT 
+            COALESCE(SUM(CASE WHEN l.txn_type = 'IN' THEN l.qty WHEN l.txn_type = 'OUT' THEN -l.qty END), 0) AS current_stock,
+            COALESCE(NULLIF(i.rack_location, ''), '-') AS rack
+        FROM items i
+        LEFT JOIN stock_logs l 
+            ON i.item_code = l.item_code 
+           AND i.item_type = l.item_type 
+           AND i.brand = l.brand
+        WHERE i.item_code = ? AND i.item_type = ? AND i.brand = ?
+        GROUP BY i.item_code, i.item_type, i.brand
     ''', (kod, jenis, brand))
-    baki_stok = cursor.fetchone()[0]
+    
+    row = cursor.fetchone()
+    baki_stok = row[0] if row else 0
+    rack_asal = row[1] if (row and row[1]) else '-'
 
     # 2. Padam item dari senarai aktif (Dashboard)
     cursor.execute('''
@@ -193,11 +203,12 @@ def delete_item():
         WHERE item_code = ? AND item_type = ? AND brand = ?
     ''', (kod, jenis, brand))
 
-    # 3. Simpan baki stok sebenar (baki_stok) ke dalam stock_logs
+    # 3. Simpan log transaksi pemadaman dengan tanda (DIPADAM) pada rak
+    rack_log = f"{rack_asal} (DIPADAM)"
     cursor.execute('''
         INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
-        VALUES (?, ?, ?, ?, 'OUT', ?, ?, '-')
-    ''', (tarikh_semasa, kod, jenis, brand, baki_stok, handled_by))
+        VALUES (?, ?, ?, ?, 'OUT', ?, ?, ?)
+    ''', (tarikh_semasa, kod, jenis, brand, baki_stok, handled_by, rack_log))
     
     conn.commit()
     conn.close()

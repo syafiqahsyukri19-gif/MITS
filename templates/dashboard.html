@@ -168,10 +168,11 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <form action="/delete" method="POST" onsubmit="return confirmDelete(this, '{{ item[0] }}');" style="margin: 0;">
+                            <form action="/delete" method="POST" onsubmit="return confirmDelete(this, '{{ item[0] }}', '{{ item[3] }}');" style="margin: 0;">
                                 <input type="hidden" name="kod" value="{{ item[0] }}">
                                 <input type="hidden" name="jenis" value="{{ item[1] }}">
                                 <input type="hidden" name="brand" value="{{ item[2] }}">
+                                <input type="hidden" name="rack" value="{{ item[3] }}">
                                 <input type="hidden" name="handled_by" class="handled-by-input">
                                 <button type="submit" class="btn btn-sm btn-danger fw-bold">Padam</button>
                             </form>
@@ -304,27 +305,29 @@
         filterTable();
     }
 
-    function confirmDelete(form, kod) {
-    // Keluar popup prompt minta nama pengendali
-    let nama = prompt("Betul ke nak delete item '" + kod + "'?\n\nSila masukkan NAMA PENGENDALI:");
+    function confirmDelete(form, kod, rack) {
+        let msg = "Betul ke nak delete item '" + kod + "'";
+        if (rack && rack !== '-') {
+            msg += " di lokasi '" + rack + "'";
+        }
+        msg += "?\n\nSila masukkan NAMA PENGENDALI:";
 
-    // Jika pengguna tekan 'Cancel'
-    if (nama === null) {
-        return false;
+        let nama = prompt(msg);
+
+        if (nama === null) {
+            return false;
+        }
+
+        nama = nama.trim();
+
+        if (nama === "") {
+            alert("Pemadaman dibatalkan! Nama pengendali wajib diisi.");
+            return false;
+        }
+
+        form.querySelector('.handled-by-input').value = nama;
+        return true;
     }
-
-    nama = nama.trim();
-
-    // Jika nama dibiarkan kosong
-    if (nama === "") {
-        alert("Pemadaman dibatalkan! Nama pengendali wajib diisi.");
-        return false;
-    }
-
-    // Masukkan nama pengendali ke dalam hidden input form
-    form.querySelector('.handled-by-input').value = nama;
-    return true;
-}
 </script>
 </body>
 </html>

@@ -24,17 +24,6 @@ def init_sqlite_db():
         )
     ''')
 
-    # Primary Key gabungan (item_code + item_type + brand)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS items (
-            item_code TEXT NOT NULL,
-            item_type TEXT NOT NULL,
-            brand TEXT NOT NULL,
-            rack_location TEXT,
-            PRIMARY KEY (item_code, item_type, brand)
-        )
-    ''')
-
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS stock_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +36,32 @@ def init_sqlite_db():
             handled_by TEXT NOT NULL,
             rack_location TEXT
         )
+    ''')
+
+    # Re-create jadual items untuk barang AKTIF sahaja (Primary Key termasuk lokasi rak)
+    cursor.execute("DROP TABLE IF EXISTS items")
+    cursor.execute('''
+        CREATE TABLE items (
+            item_code TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            brand TEXT NOT NULL,
+            rack_location TEXT NOT NULL DEFAULT '-',
+            PRIMARY KEY (item_code, item_type, brand, rack_location)
+        )
+    ''')
+
+    # Pembersihan Automatik: Hanya masukkan item AKTIF dari stock_logs ke dalam items
+    cursor.execute('''
+        INSERT OR IGNORE INTO items (item_code, item_type, brand, rack_location)
+        SELECT 
+            l.item_code,
+            l.item_type,
+            l.brand,
+            COALESCE(NULLIF(REPLACE(l.rack_location, ' (DIPADAM)', ''), ''), '-') AS rack
+        FROM stock_logs l
+        GROUP BY l.item_code, l.item_type, l.brand, COALESCE(NULLIF(REPLACE(l.rack_location, ' (DIPADAM)', ''), ''), '-')
+        HAVING MAX(CASE WHEN l.rack_location LIKE '%(DIPADAM)%' THEN 1 ELSE 0 END) = 0
+           AND SUM(CASE WHEN l.txn_type = 'IN' THEN l.qty WHEN l.txn_type = 'OUT' THEN -l.qty END) > 0
     ''')
 
     conn.commit()
@@ -65,7 +80,7 @@ def dashboard():
     cursor.execute("SELECT name FROM brands ORDER BY name ASC")
     brands = [row[0] for row in cursor.fetchall()]
 
-    # Query Stok - Diasingkan mengikut Kod, Jenis & Brand
+    # Query Dashboard: Hanya ambil item AKTIF dari jadual items
     query = '''
         SELECT 
             i.item_code, 
@@ -78,7 +93,9 @@ def dashboard():
             ON i.item_code = l.item_code 
            AND i.item_type = l.item_type 
            AND i.brand = l.brand
-        GROUP BY i.item_code, i.item_type, i.brand
+           AND COALESCE(NULLIF(REPLACE(l.rack_location, ' (DIPADAM)', ''), ''), '-') = COALESCE(NULLIF(i.rack_location, ''), '-')
+        GROUP BY i.item_code, i.item_type, i.brand, COALESCE(NULLIF(i.rack_location, ''), '-')
+        ORDER BY i.item_code ASC
     '''
     cursor.execute(query)
     items = cursor.fetchall()
@@ -126,18 +143,17 @@ def add_transaction():
     qty = int(request.form.get('qty', 1))
     txn_type = request.form.get('txn_type')
     handled_by = request.form.get('handled_by', '').strip()
-    rack_location = request.form.get('rack_location', '').strip()
+    rack_location = request.form.get('rack_location', '').strip() or '-'
 
     tarikh_semasa = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
+    # Masukkan ke dalam jadual items (jika belum ada)
     cursor.execute('''
-        INSERT INTO items (item_code, item_type, brand, rack_location)
+        INSERT OR IGNORE INTO items (item_code, item_type, brand, rack_location)
         VALUES (?, ?, ?, ?)
-        ON CONFLICT(item_code, item_type, brand) DO UPDATE SET
-            rack_location = CASE WHEN excluded.rack_location != '' THEN excluded.rack_location ELSE items.rack_location END
     ''', (item_code, item_type, brand, rack_location))
 
     cursor.execute('''
@@ -169,6 +185,7 @@ def delete_item():
     kod = request.form.get('kod')
     jenis = request.form.get('jenis')
     brand = request.form.get('brand')
+    rack = request.form.get('rack', '-').strip() or '-'
     handled_by = request.form.get('handled_by', '').strip()
 
     if not handled_by:
@@ -179,32 +196,26 @@ def delete_item():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # 1. Dapatkan baki stok semasa dan lokasi rak asal sebelum item dipadam
+    # 1. Kira baki stok semasa khusus untuk item dan lokasi rak ini
     cursor.execute('''
-        SELECT 
-            COALESCE(SUM(CASE WHEN l.txn_type = 'IN' THEN l.qty WHEN l.txn_type = 'OUT' THEN -l.qty END), 0) AS current_stock,
-            COALESCE(NULLIF(i.rack_location, ''), '-') AS rack
-        FROM items i
-        LEFT JOIN stock_logs l 
-            ON i.item_code = l.item_code 
-           AND i.item_type = l.item_type 
-           AND i.brand = l.brand
-        WHERE i.item_code = ? AND i.item_type = ? AND i.brand = ?
-        GROUP BY i.item_code, i.item_type, i.brand
-    ''', (kod, jenis, brand))
+        SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty END), 0)
+        FROM stock_logs
+        WHERE item_code = ? AND item_type = ? AND brand = ? 
+          AND COALESCE(NULLIF(REPLACE(rack_location, ' (DIPADAM)', ''), ''), '-') = ?
+    ''', (kod, jenis, brand, rack))
     
     row = cursor.fetchone()
     baki_stok = row[0] if row else 0
-    rack_asal = row[1] if (row and row[1]) else '-'
 
     # 2. Padam item dari senarai aktif (Dashboard)
     cursor.execute('''
         DELETE FROM items 
-        WHERE item_code = ? AND item_type = ? AND brand = ?
-    ''', (kod, jenis, brand))
+        WHERE item_code = ? AND item_type = ? AND brand = ? 
+          AND COALESCE(NULLIF(rack_location, ''), '-') = ?
+    ''', (kod, jenis, brand, rack))
 
-    # 3. Simpan log transaksi pemadaman dengan tanda (DIPADAM) pada rak
-    rack_log = f"{rack_asal} (DIPADAM)"
+    # 3. Simpan log pemadaman ke dalam stock_logs
+    rack_log = f"{rack} (DIPADAM)" if rack != '-' else "(DIPADAM)"
     cursor.execute('''
         INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
         VALUES (?, ?, ?, ?, 'OUT', ?, ?, ?)
@@ -213,9 +224,8 @@ def delete_item():
     conn.commit()
     conn.close()
 
-    flash(f"Item '{kod}' ({jenis} - {brand}) berjaya dipadam oleh {handled_by}!", "success")
+    flash(f"Item '{kod}' ({jenis} - {brand}) di lokasi '{rack}' berjaya dipadam oleh {handled_by}!", "success")
     return redirect(url_for('dashboard'))
 
-# Pastikan ini sentiasa berada di bahagian PALING BAWAH
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

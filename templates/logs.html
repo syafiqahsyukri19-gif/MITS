@@ -45,7 +45,7 @@
                             
                             <!-- Jenis Transaksi -->
                             <td>
-                                {% if 'DIPADAM' in log[8] or log[6] == 0 %}
+                                {% if 'DIPADAM' in (log[8] or '') %}
                                     <span class="badge bg-dark">DIPADAM</span>
                                 {% elif log[5] == 'IN' %}
                                     <span class="badge bg-success">MASUK (IN)</span>
@@ -57,13 +57,13 @@
                             <!-- Kuantiti -->
                             <td><strong>{{ log[6] }}</strong></td>
 
-                            <!-- Pengendali (Kekal nama sahaja: piqah) -->
+                            <!-- Pengendali (Kekal Nama Sahaja) -->
                             <td>{{ log[7] }}</td>
 
-                            <!-- Lokasi Rak (Papar lokasi asal seperti 'testing') -->
+                            <!-- Lokasi Rak -->
                             <td>
                                 <span class="badge bg-light text-dark border">
-                                    {{ log[8].replace('(DIPADAM)', '').strip() }}
+                                    {{ (log[8] or '').replace('(DIPADAM)', '').strip() or '-' }}
                                 </span>
                             </td>
                         </tr>

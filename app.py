@@ -1,33 +1,48 @@
-import sqlite3
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash
+import os
+from flask import Flask, flash, redirect, render_template, request, url_for
+import psycopg2
 
 app = Flask(__name__)
-app.secret_key = "kunci_rahsia_multitronik"
-DB_NAME = "inventory.db"
+app.secret_key = "ganti_dengan_secret_key_yang_selamat"  # Diperlukan untuk flask flash messages
 
-def init_sqlite_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
+# Ambil URL dari Environment Variable Render, atau guna URL Supabase secara terus
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:kata_laluan_anda@db.projek-anda.supabase.co:5432/postgres",
+)
+
+
+def get_db_connection():
+  conn = psycopg2.connect(DATABASE_URL)
+  return conn
+
+
+def init_db():
+  conn = get_db_connection()
+  cursor = conn.cursor()
+
+  # 1. Jadual Categories
+  cursor.execute("""
         CREATE TABLE IF NOT EXISTS categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT UNIQUE NOT NULL
         )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS brands (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL
-        )
-    ''')
+    """)
 
-    cursor.execute('''
+  # 2. Jadual Brands
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS brands (
+            id SERIAL PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL
+        )
+    """)
+
+  # 3. Jadual Stock Logs
+  cursor.execute("""
         CREATE TABLE IF NOT EXISTS stock_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             item_code TEXT NOT NULL,
             item_type TEXT NOT NULL,
             brand TEXT NOT NULL,
@@ -36,52 +51,41 @@ def init_sqlite_db():
             handled_by TEXT NOT NULL,
             rack_location TEXT
         )
-    ''')
+    """)
 
-    # Re-create jadual items untuk barang AKTIF sahaja (Primary Key termasuk lokasi rak)
-    cursor.execute("DROP TABLE IF EXISTS items")
-    cursor.execute('''
-        CREATE TABLE items (
+  # 4. Jadual Items (Barang Aktif)
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS items (
             item_code TEXT NOT NULL,
             item_type TEXT NOT NULL,
             brand TEXT NOT NULL,
             rack_location TEXT NOT NULL DEFAULT '-',
             PRIMARY KEY (item_code, item_type, brand, rack_location)
         )
-    ''')
+    """)
 
-    # Pembersihan Automatik: Hanya masukkan item AKTIF dari stock_logs ke dalam items
-    cursor.execute('''
-        INSERT OR IGNORE INTO items (item_code, item_type, brand, rack_location)
-        SELECT 
-            l.item_code,
-            l.item_type,
-            l.brand,
-            COALESCE(NULLIF(REPLACE(l.rack_location, ' (DIPADAM)', ''), ''), '-') AS rack
-        FROM stock_logs l
-        GROUP BY l.item_code, l.item_type, l.brand, COALESCE(NULLIF(REPLACE(l.rack_location, ' (DIPADAM)', ''), ''), '-')
-        HAVING MAX(CASE WHEN l.rack_location LIKE '%(DIPADAM)%' THEN 1 ELSE 0 END) = 0
-           AND SUM(CASE WHEN l.txn_type = 'IN' THEN l.qty WHEN l.txn_type = 'OUT' THEN -l.qty END) > 0
-    ''')
+  conn.commit()
+  cursor.close()
+  conn.close()
 
-    conn.commit()
-    conn.close()
 
-init_sqlite_db()
+# Jalankan fungsi bina jadual semasa mula-mula start
+init_db()
 
-@app.route('/')
+
+@app.route("/")
 def dashboard():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT name FROM categories ORDER BY name ASC")
-    categories = [row[0] for row in cursor.fetchall()]
+  conn = get_db_connection()
+  cursor = conn.cursor()
 
-    cursor.execute("SELECT name FROM brands ORDER BY name ASC")
-    brands = [row[0] for row in cursor.fetchall()]
+  cursor.execute("SELECT name FROM categories ORDER BY name ASC")
+  categories = [row[0] for row in cursor.fetchall()]
 
-    # Query Dashboard: Hanya ambil item AKTIF dari jadual items
-    query = '''
+  cursor.execute("SELECT name FROM brands ORDER BY name ASC")
+  brands = [row[0] for row in cursor.fetchall()]
+
+  # Query Dashboard menggunakan PostgreSQL syntax
+  query = """
         SELECT 
             i.item_code, 
             i.item_type,
@@ -96,136 +100,182 @@ def dashboard():
            AND COALESCE(NULLIF(REPLACE(l.rack_location, ' (DIPADAM)', ''), ''), '-') = COALESCE(NULLIF(i.rack_location, ''), '-')
         GROUP BY i.item_code, i.item_type, i.brand, COALESCE(NULLIF(i.rack_location, ''), '-')
         ORDER BY i.item_code ASC
-    '''
-    cursor.execute(query)
-    items = cursor.fetchall()
-    conn.close()
-    
-    return render_template('dashboard.html', categories=categories, brands=brands, items=items)
+    """
+  cursor.execute(query)
+  items = cursor.fetchall()
 
-@app.route('/add-category', methods=['POST'])
+  cursor.close()
+  conn.close()
+
+  return render_template(
+      "dashboard.html", categories=categories, brands=brands, items=items
+  )
+
+
+@app.route("/add-category", methods=["POST"])
 def add_category():
-    name = request.form.get('name', '').strip()
-    if name:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        try:
-            cursor.execute("INSERT INTO categories (name) VALUES (?)", (name,))
-            conn.commit()
-            flash(f"Jenis '{name}' berjaya ditambah!", "success")
-        except sqlite3.IntegrityError:
-            flash(f"Jenis '{name}' sudah wujud!", "danger")
-        finally:
-            conn.close()
-    return redirect(url_for('dashboard'))
+  name = request.form.get("name", "").strip()
+  if name:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+      cursor.execute("INSERT INTO categories (name) VALUES (%s)", (name,))
+      conn.commit()
+      flash(f"Jenis '{name}' berjaya ditambah!", "success")
+    except Exception:
+      conn.rollback()
+      flash(f"Jenis '{name}' sudah wujud!", "danger")
+    finally:
+      cursor.close()
+      conn.close()
+  return redirect(url_for("dashboard"))
 
-@app.route('/add-brand', methods=['POST'])
+
+@app.route("/add-brand", methods=["POST"])
 def add_brand():
-    name = request.form.get('name', '').strip()
-    if name:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
-        try:
-            cursor.execute("INSERT INTO brands (name) VALUES (?)", (name,))
-            conn.commit()
-            flash(f"Brand '{name}' berjaya ditambah!", "success")
-        except sqlite3.IntegrityError:
-            flash(f"Brand '{name}' sudah wujud!", "danger")
-        finally:
-            conn.close()
-    return redirect(url_for('dashboard'))
+  name = request.form.get("name", "").strip()
+  if name:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+      cursor.execute("INSERT INTO brands (name) VALUES (%s)", (name,))
+      conn.commit()
+      flash(f"Brand '{name}' berjaya ditambah!", "success")
+    except Exception:
+      conn.rollback()
+      flash(f"Brand '{name}' sudah wujud!", "danger")
+    finally:
+      cursor.close()
+      conn.close()
+  return redirect(url_for("dashboard"))
 
-@app.route('/transaction', methods=['POST'])
+
+@app.route("/transaction", methods=["POST"])
 def add_transaction():
-    item_code = request.form.get('item_code', '').strip().upper()
-    item_type = request.form.get('item_type')
-    brand = request.form.get('brand')
-    qty = int(request.form.get('qty', 1))
-    txn_type = request.form.get('txn_type')
-    handled_by = request.form.get('handled_by', '').strip()
-    rack_location = request.form.get('rack_location', '').strip() or '-'
+  item_code = request.form.get("item_code", "").strip().upper()
+  item_type = request.form.get("item_type")
+  brand = request.form.get("brand")
+  qty = int(request.form.get("qty", 1))
+  txn_type = request.form.get("txn_type")
+  handled_by = request.form.get("handled_by", "").strip()
+  rack_location = request.form.get("rack_location", "").strip() or "-"
 
-    tarikh_semasa = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  tarikh_semasa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+  conn = get_db_connection()
+  cursor = conn.cursor()
 
-    # Masukkan ke dalam jadual items (jika belum ada)
-    cursor.execute('''
-        INSERT OR IGNORE INTO items (item_code, item_type, brand, rack_location)
-        VALUES (?, ?, ?, ?)
-    ''', (item_code, item_type, brand, rack_location))
+  # Masukkan ke dalam jadual items (jika belum ada - PostgreSQL UPSERT syntax)
+  cursor.execute(
+      """
+        INSERT INTO items (item_code, item_type, brand, rack_location)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (item_code, item_type, brand, rack_location) DO NOTHING
+    """,
+      (item_code, item_type, brand, rack_location),
+  )
 
-    cursor.execute('''
+  cursor.execute(
+      """
         INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (tarikh_semasa, item_code, item_type, brand, txn_type, qty, handled_by, rack_location))
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """,
+      (
+          tarikh_semasa,
+          item_code,
+          item_type,
+          brand,
+          txn_type,
+          qty,
+          handled_by,
+          rack_location,
+      ),
+  )
 
-    conn.commit()
-    conn.close()
+  conn.commit()
+  cursor.close()
+  conn.close()
 
-    flash("Data pergerakan stok berjaya disimpan!", "success")
-    return redirect(url_for('dashboard'))
+  flash("Data pergerakan stok berjaya disimpan!", "success")
+  return redirect(url_for("dashboard"))
 
-@app.route('/logs')
+
+@app.route("/logs")
 def view_logs():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  cursor.execute("""
         SELECT l.id, l.timestamp, l.item_code, l.item_type, l.brand, l.txn_type, l.qty, l.handled_by, COALESCE(NULLIF(l.rack_location, ''), '-')
         FROM stock_logs l
         ORDER BY l.id DESC
-    ''')
-    logs = cursor.fetchall()
-    conn.close()
-    return render_template('logs.html', logs=logs)
+    """)
+  logs = cursor.fetchall()
+  cursor.close()
+  conn.close()
+  return render_template("logs.html", logs=logs)
 
-@app.route('/delete', methods=['POST'])
+
+@app.route("/delete", methods=["POST"])
 def delete_item():
-    kod = request.form.get('kod')
-    jenis = request.form.get('jenis')
-    brand = request.form.get('brand')
-    rack = request.form.get('rack', '-').strip() or '-'
-    handled_by = request.form.get('handled_by', '').strip()
+  kod = request.form.get("kod")
+  jenis = request.form.get("jenis")
+  brand = request.form.get("brand")
+  rack = request.form.get("rack", "-").strip() or "-"
+  handled_by = request.form.get("handled_by", "").strip()
 
-    if not handled_by:
-        handled_by = "Pengguna"
+  if not handled_by:
+    handled_by = "Pengguna"
 
-    tarikh_semasa = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  tarikh_semasa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    # 1. Kira baki stok semasa khusus untuk item dan lokasi rak ini
-    cursor.execute('''
+  conn = get_db_connection()
+  cursor = conn.cursor()
+
+  # 1. Kira baki stok semasa
+  cursor.execute(
+      """
         SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty END), 0)
         FROM stock_logs
-        WHERE item_code = ? AND item_type = ? AND brand = ? 
-          AND COALESCE(NULLIF(REPLACE(rack_location, ' (DIPADAM)', ''), ''), '-') = ?
-    ''', (kod, jenis, brand, rack))
-    
-    row = cursor.fetchone()
-    baki_stok = row[0] if row else 0
+        WHERE item_code = %s AND item_type = %s AND brand = %s 
+          AND COALESCE(NULLIF(REPLACE(rack_location, ' (DIPADAM)', ''), ''), '-') = %s
+    """,
+      (kod, jenis, brand, rack),
+  )
 
-    # 2. Padam item dari senarai aktif (Dashboard)
-    cursor.execute('''
+  row = cursor.fetchone()
+  baki_stok = row[0] if row else 0
+
+  # 2. Padam item dari senarai aktif (Dashboard)
+  cursor.execute(
+      """
         DELETE FROM items 
-        WHERE item_code = ? AND item_type = ? AND brand = ? 
-          AND COALESCE(NULLIF(rack_location, ''), '-') = ?
-    ''', (kod, jenis, brand, rack))
+        WHERE item_code = %s AND item_type = %s AND brand = %s 
+          AND COALESCE(NULLIF(rack_location, ''), '-') = %s
+    """,
+      (kod, jenis, brand, rack),
+  )
 
-    # 3. Simpan log pemadaman ke dalam stock_logs
-    rack_log = f"{rack} (DIPADAM)" if rack != '-' else "(DIPADAM)"
-    cursor.execute('''
+  # 3. Simpan log pemadaman
+  rack_log = f"{rack} (DIPADAM)" if rack != "-" else "(DIPADAM)"
+  cursor.execute(
+      """
         INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
-        VALUES (?, ?, ?, ?, 'OUT', ?, ?, ?)
-    ''', (tarikh_semasa, kod, jenis, brand, baki_stok, handled_by, rack_log))
-    
-    conn.commit()
-    conn.close()
+        VALUES (%s, %s, %s, %s, 'OUT', %s, %s, %s)
+    """,
+      (tarikh_semasa, kod, jenis, brand, baki_stok, handled_by, rack_log),
+  )
 
-    flash(f"Item '{kod}' ({jenis} - {brand}) di lokasi '{rack}' berjaya dipadam oleh {handled_by}!", "success")
-    return redirect(url_for('dashboard'))
+  conn.commit()
+  cursor.close()
+  conn.close()
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+  flash(
+      f"Item '{kod}' ({jenis} - {brand}) di lokasi '{rack}' berjaya dipadam oleh"
+      f" {handled_by}!",
+      "success",
+  )
+  return redirect(url_for("dashboard"))
+
+
+if __name__ == "__main__":
+  app.run(debug=True, port=5000)

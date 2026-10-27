@@ -38,7 +38,7 @@
                             <th>Kod Barang</th>
                             <th>Jenis</th>
                             <th>Brand</th>
-                            <th>Jenis Transaksi</th>
+                            <th>Tindakan</th> <!-- Ditukar daripada "Jenis Transaksi" -->
                             <th>Kuantiti</th>
                             <th>Pengendali</th>
                             <th>Lokasi Rak</th>
@@ -53,10 +53,12 @@
                             <td>{{ log[3] }}</td>
                             <td>{{ log[4] }}</td>
                             
-                            <!-- Jenis Transaksi -->
+                            <!-- Tindakan / Jenis Transaksi -->
                             <td>
                                 {% if 'DIPADAM' in (log[8] or '') %}
-                                    <span class="badge bg-dark">DIPADAM</span>
+                                    <span class="badge bg-dark">PADAM (DELETE)</span>
+                                {% elif 'Kemas Kini Stok' in (log[7] or '') %}
+                                    <span class="badge bg-info text-dark">SUNTING (EDIT)</span> <!-- Ditukar kepada warna biru cerah (info) -->
                                 {% elif log[5] == 'IN' %}
                                     <span class="badge bg-success">MASUK (IN)</span>
                                 {% else %}
@@ -67,7 +69,7 @@
                             <!-- Kuantiti -->
                             <td><strong>{{ log[6] }}</strong></td>
 
-                            <!-- Pengendali (Kekal Nama Sahaja) -->
+                            <!-- Pengendali -->
                             <td>{{ log[7] }}</td>
 
                             <!-- Lokasi Rak -->

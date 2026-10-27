@@ -178,14 +178,24 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <form action="/delete" method="POST" onsubmit="return confirmDelete(this, '{{ item[0] }}', '{{ item[3] }}');" style="margin: 0;">
-                                    <input type="hidden" name="kod" value="{{ item[0] }}">
-                                    <input type="hidden" name="jenis" value="{{ item[1] }}">
-                                    <input type="hidden" name="brand" value="{{ item[2] }}">
-                                    <input type="hidden" name="rack" value="{{ item[3] }}">
-                                    <input type="hidden" name="handled_by" class="handled-by-input">
-                                    <button type="submit" class="btn btn-sm btn-danger fw-bold">Padam</button>
-                                </form>
+                                <div class="d-flex justify-content-center gap-1">
+                                    <!-- Butang Edit Stok -->
+                                    <button type="button" 
+                                            class="btn btn-sm btn-warning fw-bold" 
+                                            onclick="openEditModal('{{ item[0] }}', '{{ item[1] }}', '{{ item[2] }}', '{{ item[3] }}', '{{ item[4] }}')">
+                                        Edit
+                                    </button>
+
+                                    <!-- Butang Padam -->
+                                    <form action="/delete" method="POST" onsubmit="return confirmDelete(this, '{{ item[0] }}', '{{ item[3] }}');" style="margin: 0;">
+                                        <input type="hidden" name="kod" value="{{ item[0] }}">
+                                        <input type="hidden" name="jenis" value="{{ item[1] }}">
+                                        <input type="hidden" name="brand" value="{{ item[2] }}">
+                                        <input type="hidden" name="rack" value="{{ item[3] }}">
+                                        <input type="hidden" name="handled_by" class="handled-by-input">
+                                        <button type="submit" class="btn btn-sm btn-danger fw-bold">Padam</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         {% else %}
@@ -247,6 +257,45 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
           <button type="submit" class="btn btn-primary fw-bold">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL POPUP: EDIT STOK -->
+<div class="modal fade" id="modalEditStok" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form action="/edit-stock" method="POST">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title fw-bold">Kemas Kini Stok</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="kod" id="edit_item_code">
+          <input type="hidden" name="jenis" id="edit_item_type">
+          <input type="hidden" name="brand" id="edit_brand">
+          <input type="hidden" name="rack" id="edit_rack">
+
+          <div class="mb-3">
+            <label class="form-label fw-bold">Kod Barang</label>
+            <input type="text" id="display_item_code" class="form-control" readonly disabled>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold">Baki Stok Baharu <span class="text-danger">*</span></label>
+            <input type="number" name="new_qty" id="edit_new_qty" min="0" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-bold">Pengendali (Nama) <span class="text-danger">*</span></label>
+            <input type="text" name="handled_by" class="form-control" placeholder="Nama anda" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-warning fw-bold">Simpan Perubahan</button>
         </div>
       </form>
     </div>
@@ -315,6 +364,18 @@
         document.getElementById('filterBrand').value = '';
         filterTable();
     }
+
+    function openEditModal(kod, jenis, brand, rack, qty) {
+    document.getElementById('edit_item_code').value = kod;
+    document.getElementById('display_item_code').value = kod;
+    document.getElementById('edit_item_type').value = jenis;
+    document.getElementById('edit_brand').value = brand;
+    document.getElementById('edit_rack').value = rack;
+    document.getElementById('edit_new_qty').value = qty;
+
+    var editModal = new bootstrap.Modal(document.getElementById('modalEditStok'));
+    editModal.show();
+}
 
     function confirmDelete(form, kod, rack) {
         let msg = "Betul ke nak delete item '" + kod + "'";

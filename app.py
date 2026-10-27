@@ -276,6 +276,53 @@ def delete_item():
   )
   return redirect(url_for("dashboard"))
 
+@app.route('/edit-stock', methods=['POST'])
+def edit_stock():
+    kod = request.form.get('kod')
+    jenis = request.form.get('jenis')
+    brand = request.form.get('brand')
+    rack = request.form.get('rack', '-').strip() or '-'
+    new_qty = int(request.form.get('new_qty', 0))
+    handled_by = request.form.get('handled_by', '').strip() or 'Pengguna'
+
+    tarikh_semasa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1. Dapatkan stok semasa dari log
+    cursor.execute("""
+        SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty END), 0)
+        FROM stock_logs
+        WHERE item_code = %s AND item_type = %s AND brand = %s 
+          AND COALESCE(NULLIF(REPLACE(rack_location, ' (DIPADAM)', ''), ''), '-') = %s
+    """, (kod, jenis, brand, rack))
+
+    row = cursor.fetchone()
+    current_qty = row[0] if row else 0
+
+    diff = new_qty - current_qty
+
+    # 2. Jika ada perubahan stok, rekod transaksi laras stok
+    if diff != 0:
+        txn_type = 'IN' if diff > 0 else 'OUT'
+        qty_change = abs(diff)
+
+        cursor.execute("""
+            INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """, (tarikh_semasa, kod, jenis, brand, txn_type, qty_change, f"{handled_by} (Kemas Kini Stok)", rack))
+
+        conn.commit()
+        flash(f"Stok untuk '{kod}' berjaya dikemas kini daripada {current_qty} ke {new_qty}!", "success")
+    else:
+        flash("Tiada perubahan dibuat pada kuantiti stok.", "info")
+
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('dashboard'))
 
 if __name__ == "__main__":
   app.run(debug=True, port=5000)
+  

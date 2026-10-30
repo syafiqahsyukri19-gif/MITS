@@ -69,9 +69,9 @@
                             <!-- Kuantiti -->
                             <td>
                                 <strong>
-                                    {% if log[5] == 'IN' %}
+                                    {% if log[5] == 'IN' and 'Kemas Kini Stok' in (log[7] or '') %}
                                         +{{ log[6] }}
-                                    {% elif log[5] == 'OUT' %}
+                                    {% elif log[5] == 'OUT' and 'Kemas Kini Stok' in (log[7] or '') %}
                                         -{{ log[6] }}
                                     {% else %}
                                         {{ log[6] }}

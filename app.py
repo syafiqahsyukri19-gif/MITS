@@ -46,7 +46,7 @@ def init_db():
             item_code TEXT NOT NULL,
             item_type TEXT NOT NULL,
             brand TEXT NOT NULL,
-            txn_type TEXT CHECK NOT NULL,
+            txn_type TEXT NOT NULL,
             qty INTEGER NOT NULL,
             handled_by TEXT NOT NULL,
             rack_location TEXT

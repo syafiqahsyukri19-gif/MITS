@@ -57,7 +57,7 @@
                             <td>
                                 {% if 'DIPADAM' in (log[8] or '') %}
                                     <span class="badge bg-dark">PADAM (DELETE)</span>
-                                {% elif 'Kemas Kini Stok' in (log[7] or '') %}
+                                {% elif log[5] =='EDIT' or'Kemas Kini Stok' in (log[7] or '') %}
                                     <span class="badge bg-info text-dark">SUNTING (EDIT)</span> <!-- Ditukar kepada warna biru cerah (info) -->
                                 {% elif log[5] == 'IN' %}
                                     <span class="badge bg-success">MASUK (IN)</span>

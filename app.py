@@ -46,7 +46,7 @@ def init_db():
             item_code TEXT NOT NULL,
             item_type TEXT NOT NULL,
             brand TEXT NOT NULL,
-            txn_type TEXT CHECK(txn_type IN ('IN', 'OUT')) NOT NULL,
+            txn_type TEXT CHECK NOT NULL,
             qty INTEGER NOT NULL,
             handled_by TEXT NOT NULL,
             rack_location TEXT
@@ -290,8 +290,10 @@ def edit_stock():
     
     # Jika rak asal tiada ('-') dan pengguna ada mengisi lokasi baharu, kemas kini rak tersebut
     target_rack = rack
+    rack_changed = False
     if (not rack or rack == '-') and new_rack_input:
         target_rack = new_rack_input
+        rack_changed = True
 
     tarikh_semasa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -300,7 +302,7 @@ def edit_stock():
 
     # 1. Dapatkan stok semasa dari log berdasarkan rak asal
     cursor.execute("""
-        SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty END), 0)
+        SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty ELSE 0 END), 0)
         FROM stock_logs
         WHERE item_code = %s AND item_type = %s AND brand = %s 
           AND COALESCE(NULLIF(REPLACE(rack_location, ' (DIPADAM)', ''), ''), '-') = %s
@@ -311,27 +313,30 @@ def edit_stock():
 
     diff = new_qty - current_qty
 
-    # 2. Jika lokasi berubah (tambah rak baharu), kita kemas kini jadual items
-    if target_rack != rack:
+    if rack_changed:
         cursor.execute("""
-            UPDATE items 
-            SET rack_location = %s 
+            INSERT INTO items (item_code, item_type, brand, rack_location)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (item_code, item_type, brand, rack_location) DO NOTHING
+        """, (kod, jenis, brand, target_rack))
+
+        cursor.execute("""
+            DELETE FROM items 
             WHERE item_code = %s AND item_type = %s AND brand = %s AND rack_location = %s
-        """, (target_rack, kod, jenis, brand, rack))
+        """, (kod, jenis, brand, rack))
 
-    # 3. Jika ada perubahan stok, rekod transaksi laras stok
-    if diff != 0 or target_rack != rack:
-        txn_type = 'IN' if diff >= 0 else 'OUT'
-        qty_change = abs(diff) if diff != 0 else 0 # Jika kuantiti sama tapi ubah lokasi, qty change boleh jadi 0 atau kekal
+    if diff != 0 or rack_changed:
+        # Jika ada perubahan kuantiti atau lokasi, tandakan sebagai EDIT atau laras stok
+        txn_type = 'EDIT'
+        qty_change = new_qty # Paparkan kuantiti terkini tanpa simbol tambah/tolak
 
-        # Rekod ke stock_logs menggunakan target_rack yang terkini
         cursor.execute("""
             INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (tarikh_semasa, kod, jenis, brand, txn_type, qty_change if diff != 0 else 1, handled_by, target_rack))
+        """, (tarikh_semasa, kod, jenis, brand, txn_type, qty_change, handled_by, target_rack))
 
         conn.commit()
-        flash(f"Stok untuk '{kod}' berjaya dikemas kini!", "success")
+        flash(f"Maklumat untuk '{kod}' berjaya dikemas kini!", "success")
     else:
         flash("Tiada perubahan dibuat pada kuantiti atau lokasi stok.", "info")
 

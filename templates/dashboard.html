@@ -288,6 +288,12 @@
             <input type="number" name="new_qty" id="edit_new_qty" min="0" class="form-control" required>
           </div>
 
+        <!-- Medan Lokasi Rak Tambahan (Hanya muncul jika tiada lokasi asal / '-') -->
+          <div class="mb-3" id="rackLocationGroup" style="display: none;">
+            <label class="form-label fw-bold">Lokasi (Rak) <small class="text-muted">(Pilihan)</small></label>
+            <input type="text" name="new_rack_location" id="edit_new_rack_location" class="form-control" placeholder="Cth: Rak A-01">
+          </div>
+
           <div class="mb-3">
             <label class="form-label fw-bold">Pengendali (Nama) <span class="text-danger">*</span></label>
             <input type="text" name="handled_by" class="form-control" placeholder="Nama anda" required>
@@ -373,6 +379,18 @@
     document.getElementById('edit_rack').value = rack;
     document.getElementById('edit_new_qty').value = qty;
 
+    // Logik paparan medan lokasi rak: Jika rak tiada ( '-'), paparkan input lokasi baharu
+    const rackGroup = document.getElementById('rackLocationGroup');
+    const rackInput = document.getElementById('edit_new_rack_location');
+    
+    if (!rack || rack === '-') {
+        rackGroup.style.display = 'block';
+        rackInput.value = ''; // Kosongkan sekiranya pengguna mahu isi (pilihan)
+    } else {
+        rackGroup.style.display = 'none';
+        rackInput.value = ''; 
+    }
+    
     var editModal = new bootstrap.Modal(document.getElementById('modalEditStok'));
     editModal.show();
 }

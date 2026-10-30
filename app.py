@@ -284,13 +284,21 @@ def edit_stock():
     rack = request.form.get('rack', '-').strip() or '-'
     new_qty = int(request.form.get('new_qty', 0))
     handled_by = request.form.get('handled_by', '').strip() or 'Pengguna'
+    
+    # Ambil input lokasi baharu jika ada
+    new_rack_input = request.form.get('new_rack_location', '').strip()
+    
+    # Jika rak asal tiada ('-') dan pengguna ada mengisi lokasi baharu, kemas kini rak tersebut
+    target_rack = rack
+    if (not rack or rack == '-') and new_rack_input:
+        target_rack = new_rack_input
 
     tarikh_semasa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 1. Dapatkan stok semasa dari log
+    # 1. Dapatkan stok semasa dari log berdasarkan rak asal
     cursor.execute("""
         SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty END), 0)
         FROM stock_logs
@@ -303,20 +311,29 @@ def edit_stock():
 
     diff = new_qty - current_qty
 
-    # 2. Jika ada perubahan stok, rekod transaksi laras stok
-    if diff != 0:
-        txn_type = 'IN' if diff > 0 else 'OUT'
-        qty_change = abs(diff)
+    # 2. Jika lokasi berubah (tambah rak baharu), kita kemas kini jadual items
+    if target_rack != rack:
+        cursor.execute("""
+            UPDATE items 
+            SET rack_location = %s 
+            WHERE item_code = %s AND item_type = %s AND brand = %s AND rack_location = %s
+        """, (target_rack, kod, jenis, brand, rack))
 
+    # 3. Jika ada perubahan stok, rekod transaksi laras stok
+    if diff != 0 or target_rack != rack:
+        txn_type = 'IN' if diff >= 0 else 'OUT'
+        qty_change = abs(diff) if diff != 0 else 0 # Jika kuantiti sama tapi ubah lokasi, qty change boleh jadi 0 atau kekal
+
+        # Rekod ke stock_logs menggunakan target_rack yang terkini
         cursor.execute("""
             INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (tarikh_semasa, kod, jenis, brand, txn_type, qty_change, f"{handled_by}", rack))
+        """, (tarikh_semasa, kod, jenis, brand, txn_type, qty_change if diff != 0 else 1, handled_by, target_rack))
 
         conn.commit()
-        flash(f"Stok untuk '{kod}' berjaya dikemas kini daripada {current_qty} ke {new_qty}!", "success")
+        flash(f"Stok untuk '{kod}' berjaya dikemas kini!", "success")
     else:
-        flash("Tiada perubahan dibuat pada kuantiti stok.", "info")
+        flash("Tiada perubahan dibuat pada kuantiti atau lokasi stok.", "info")
 
     cursor.close()
     conn.close()

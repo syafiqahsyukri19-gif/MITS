@@ -278,70 +278,80 @@ def delete_item():
 
 @app.route('/edit-stock', methods=['POST'])
 def edit_stock():
-    kod = request.form.get('kod')
-    jenis = request.form.get('jenis')
-    brand = request.form.get('brand')
-    rack = request.form.get('rack', '-').strip() or '-'
-    new_qty = int(request.form.get('new_qty', 0))
-    handled_by = request.form.get('handled_by', '').strip() or 'Pengguna'
-    
-    # Ambil input lokasi baharu jika ada
-    new_rack_input = request.form.get('new_rack_location', '').strip()
-    
-    # Jika rak asal tiada ('-') dan pengguna ada mengisi lokasi baharu, kemas kini rak tersebut
-    target_rack = rack
-    rack_changed = False
-    if (not rack or rack == '-') and new_rack_input:
-        target_rack = new_rack_input
-        rack_changed = True
+    try:
+        kod = request.form.get('kod')
+        jenis = request.form.get('jenis')
+        brand = request.form.get('brand')
+        rack = request.form.get('rack', '-').strip() or '-'
+        
+        # 1. Pastikan medan utama tidak kosong
+        if not kod or not jenis or not brand:
+            flash("Ralat: Maklumat barang tidak lengkap!", "danger")
+            return redirect(url_for('dashboard'))
 
-    tarikh_semasa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 2. Elakkan ValueError jika new_qty kosong
+        raw_qty = request.form.get('new_qty', '').strip()
+        if not raw_qty.isdigit():
+            flash("Ralat: Sila masukkan kuantiti angka yang sah!", "danger")
+            return redirect(url_for('dashboard'))
+            
+        new_qty = int(raw_qty)
+        handled_by = request.form.get('handled_by', '').strip() or 'Pengguna'
+        new_rack_input = request.form.get('new_rack_location', '').strip()
+        
+        target_rack = rack
+        rack_changed = False
+        if (not rack or rack == '-') and new_rack_input:
+            target_rack = new_rack_input
+            rack_changed = True
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+        tarikh_semasa = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 1. Dapatkan stok semasa dari log berdasarkan rak asal
-    cursor.execute("""
-        SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty ELSE 0 END), 0)
-        FROM stock_logs
-        WHERE item_code = %s AND item_type = %s AND brand = %s 
-          AND COALESCE(NULLIF(REPLACE(rack_location, ' (DIPADAM)', ''), ''), '-') = %s
-    """, (kod, jenis, brand, rack))
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    row = cursor.fetchone()
-    current_qty = row[0] if row else 0
-
-    diff = new_qty - current_qty
-
-    if rack_changed:
+        # Dapatkan stok semasa dari log
         cursor.execute("""
-            INSERT INTO items (item_code, item_type, brand, rack_location)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (item_code, item_type, brand, rack_location) DO NOTHING
-        """, (kod, jenis, brand, target_rack))
-
-        cursor.execute("""
-            DELETE FROM items 
-            WHERE item_code = %s AND item_type = %s AND brand = %s AND rack_location = %s
+            SELECT COALESCE(SUM(CASE WHEN txn_type = 'IN' THEN qty WHEN txn_type = 'OUT' THEN -qty ELSE 0 END), 0)
+            FROM stock_logs
+            WHERE item_code = %s AND item_type = %s AND brand = %s 
+              AND COALESCE(NULLIF(REPLACE(rack_location, ' (DIPADAM)', ''), ''), '-') = %s
         """, (kod, jenis, brand, rack))
 
-    if diff != 0 or rack_changed:
-        # Jika ada perubahan kuantiti atau lokasi, tandakan sebagai EDIT atau laras stok
-        txn_type = 'EDIT'
-        qty_change = new_qty # Paparkan kuantiti terkini tanpa simbol tambah/tolak
+        row = cursor.fetchone()
+        current_qty = row[0] if row else 0
 
-        cursor.execute("""
-            INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
-            VALUES (%s, %s, %s, %s, %s , %s, %s, %s)
-        """, (tarikh_semasa, kod, jenis, brand, 'EDIT', new_qty, handled_by, target_rack))
+        diff = new_qty - current_qty
 
-        conn.commit()
-        flash(f"Maklumat untuk '{kod}' berjaya dikemas kini!", "success")
-    else:
-        flash("Tiada perubahan dibuat pada kuantiti atau lokasi stok.", "info")
+        if rack_changed:
+            cursor.execute("""
+                INSERT INTO items (item_code, item_type, brand, rack_location)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (item_code, item_type, brand, rack_location) DO NOTHING
+            """, (kod, jenis, brand, target_rack))
 
-    cursor.close()
-    conn.close()
+            cursor.execute("""
+                DELETE FROM items 
+                WHERE item_code = %s AND item_type = %s AND brand = %s AND rack_location = %s
+            """, (kod, jenis, brand, rack))
+
+        if diff != 0 or rack_changed:
+            cursor.execute("""
+                INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (tarikh_semasa, kod, jenis, brand, 'EDIT', new_qty, handled_by, target_rack))
+
+            conn.commit()
+            flash(f"Maklumat untuk '{kod}' berjaya dikemas kini!", "success")
+        else:
+            flash("Tiada perubahan dibuat pada kuantiti atau lokasi stok.", "info")
+
+        cursor.close()
+        conn.close()
+
+    except Exception as e:
+        print(f"Ralat edit_stock: {e}")
+        flash("Gagal mengemas kini stok. Sila semak semula input anda.", "danger")
 
     return redirect(url_for('dashboard'))
 

@@ -311,7 +311,7 @@ def edit_stock():
         cursor.execute("""
             INSERT INTO stock_logs (timestamp, item_code, item_type, brand, txn_type, qty, handled_by, rack_location)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (tarikh_semasa, kod, jenis, brand, txn_type, qty_change, f"{handled_by} (Kemas Kini Stok)", rack))
+        """, (tarikh_semasa, kod, jenis, brand, txn_type, qty_change, f"{handled_by}", rack))
 
         conn.commit()
         flash(f"Stok untuk '{kod}' berjaya dikemas kini daripada {current_qty} ke {new_qty}!", "success")

@@ -67,7 +67,17 @@
                             </td>
 
                             <!-- Kuantiti -->
-                            <td><strong>{{ log[6] }}</strong></td>
+                            <td>
+                                <strong>
+                                    {% if log[5] == 'IN' %}
+                                        +{{ log[6] }}
+                                    {% elif log[5] == 'OUT' %}
+                                        -{{ log[6] }}
+                                    {% else %}
+                                        {{ log[6] }}
+                                    {% endif %}
+                                </strong>
+                            </td>
 
                             <!-- Pengendali -->
                             <td>{{ log[7] }}</td>

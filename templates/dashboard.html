@@ -180,9 +180,15 @@
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
                                     <!-- Butang Edit Stok -->
+                                    <!-- Butang Edit Stok Selamat -->
                                     <button type="button" 
                                             class="btn btn-sm btn-warning fw-bold" 
-                                            onclick="openEditModal('{{ item[0] }}', '{{ item[1] }}', '{{ item[2] }}', '{{ item[3] }}', '{{ item[4] }}')">
+                                            data-kod="{{ item[0] }}"
+                                            data-jenis="{{ item[1] }}"
+                                            data-brand="{{ item[2] }}"
+                                            data-rack="{{ item[3] }}"
+                                            data-qty="{{ item[4] }}"
+                                            onclick="openEditModalFromBtn(this)">
                                         Edit
                                     </button>
 
@@ -371,7 +377,13 @@
         filterTable();
     }
 
-    function openEditModal(kod, jenis, brand, rack, qty) {
+function openEditModalFromBtn(btn) {
+    const kod = btn.getAttribute('data-kod');
+    const jenis = btn.getAttribute('data-jenis');
+    const brand = btn.getAttribute('data-brand');
+    const rack = btn.getAttribute('data-rack');
+    const qty = btn.getAttribute('data-qty');
+
     document.getElementById('edit_item_code').value = kod;
     document.getElementById('display_item_code').value = kod;
     document.getElementById('edit_item_type').value = jenis;
@@ -379,13 +391,12 @@
     document.getElementById('edit_rack').value = rack;
     document.getElementById('edit_new_qty').value = qty;
 
-    // Logik paparan medan lokasi rak: Jika rak tiada ( '-'), paparkan input lokasi baharu
     const rackGroup = document.getElementById('rackLocationGroup');
     const rackInput = document.getElementById('edit_new_rack_location');
     
     if (!rack || rack === '-') {
         rackGroup.style.display = 'block';
-        rackInput.value = ''; // Kosongkan sekiranya pengguna mahu isi (pilihan)
+        rackInput.value = '';
     } else {
         rackGroup.style.display = 'none';
         rackInput.value = ''; 
